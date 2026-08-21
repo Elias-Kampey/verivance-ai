@@ -1,0 +1,5 @@
+A vector database stores numerical representations called vectors or embeddings. Embeddings capture semantic meaning so that similar pieces of text are located near each other in vector space.
+
+Vector databases support similarity search. A user's question can be converted into an embedding and compared with stored document embeddings to find the most semantically similar information.
+
+Pinecone is a vector database designed for storing, searching, and managing embeddings. It can be used as the retrieval component of a RAG application.

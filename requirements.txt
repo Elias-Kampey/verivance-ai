@@ -1,3 +1,4 @@
+
 altair==6.2.2
 anyio==4.14.2
 attrs==26.1.0
@@ -34,3 +35,7 @@ typing_extensions==4.16.0
 urllib3==2.7.0
 uvicorn==0.52.4
 websockets==16.1.1
+pinecone
+python-dotenv
+google-genai
+
