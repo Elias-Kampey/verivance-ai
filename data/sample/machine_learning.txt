@@ -1,0 +1,5 @@
+Machine learning is a field of artificial intelligence in which computer systems learn patterns from data. Instead of explicitly programming every possible rule, developers train models using examples.
+
+Common machine learning tasks include classification, regression, clustering, and prediction. Models are evaluated using data that was not used during training to determine how well they generalize.
+
+Machine learning is used in areas such as recommendation systems, image recognition, fraud detection, and natural language processing.
