@@ -10,7 +10,7 @@ INDEX_NAME = "verivance-rag"
 NAMESPACE = "sample"
 
 
-def search(query: str, top_k: int = 5):
+def search(query: str, top_k: int = 5) -> list[dict]:
     load_dotenv()
 
     api_key = os.getenv("PINECONE_API_KEY")
@@ -31,7 +31,23 @@ def search(query: str, top_k: int = 5):
         include_values=False,
     )
 
-    return results.matches
+    formatted_results = []
+
+    for rank, match in enumerate(results.matches, start=1):
+        metadata = match.metadata or {}
+
+        formatted_results.append(
+            {
+                "rank": rank,
+                "score": float(match.score),
+                "title": metadata.get("title", ""),
+                "source": metadata.get("source", ""),
+                "chunk_id": metadata.get("chunk_id", ""),
+                "text": metadata.get("text", ""),
+            }
+        )
+
+    return formatted_results
 
 
 if __name__ == "__main__":
@@ -41,10 +57,10 @@ if __name__ == "__main__":
 
     print("\nTop matches:\n")
 
-    for number, match in enumerate(matches, start=1):
-        print(f"{number}. Score: {match.score:.4f}")
-        print(f"   Title: {match.metadata['title']}")
-        print(f"   Source: {match.metadata['source']}")
-        print(f"   Chunk ID: {match.metadata['chunk_id']}")
-        print(f"   Text: {match.metadata['text']}")
+    for match in matches:
+        print(f"{match['rank']}. Score: {match['score']:.4f}")
+        print(f"   Title: {match['title']}")
+        print(f"   Source: {match['source']}")
+        print(f"   Chunk ID: {match['chunk_id']}")
+        print(f"   Text: {match['text']}")
         print()
