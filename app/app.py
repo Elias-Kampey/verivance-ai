@@ -19,3 +19,13 @@ if st.button("Search"):
         st.write("Searching sources...")
     else:
         st.warning("Please enter a question.")
+
+
+        st.divider()
+st.subheader("Demo Sources")
+
+with open("data/sources.txt", "r") as file:
+    sources = [line.strip() for line in file if line.strip()]
+
+for i, source in enumerate(sources, start=1):
+    st.markdown(f"{i}. [{source}]({source})")
