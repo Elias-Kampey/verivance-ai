@@ -43,6 +43,8 @@ if __name__ == "__main__":
 
     for number, match in enumerate(matches, start=1):
         print(f"{number}. Score: {match.score:.4f}")
+        print(f"   Title: {match.metadata['title']}")
         print(f"   Source: {match.metadata['source']}")
+        print(f"   Chunk ID: {match.metadata['chunk_id']}")
         print(f"   Text: {match.metadata['text']}")
         print()
