@@ -10,7 +10,11 @@ INDEX_NAME = "verivance-rag"
 NAMESPACE = "sample"
 
 
-def search(query: str, top_k: int = 5) -> list[dict]:
+def search(
+    query: str,
+    top_k: int = 5,
+    namespace: str = NAMESPACE
+) -> list[dict]:
     load_dotenv()
 
     api_key = os.getenv("PINECONE_API_KEY")
@@ -24,7 +28,7 @@ def search(query: str, top_k: int = 5) -> list[dict]:
     query_vector = embed_query(query)
 
     results = index.query(
-        namespace=NAMESPACE,
+        namespace=namespace,
         vector=query_vector,
         top_k=top_k,
         include_metadata=True,

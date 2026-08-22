@@ -1,0 +1,27 @@
+[
+  {
+    "file": "source_01.txt",
+    "title": "The Python Tutorial \u2014 Python 3.14.7 documentation",
+    "source": "https://docs.python.org/3/tutorial/"
+  },
+  {
+    "file": "source_02.txt",
+    "title": "Input widgets - Streamlit Docs",
+    "source": "https://docs.streamlit.io/develop/api-reference/widgets"
+  },
+  {
+    "file": "source_03.txt",
+    "title": "Semantic search - Pinecone Docs",
+    "source": "https://docs.pinecone.io/guides/search/semantic-search"
+  },
+  {
+    "file": "source_04.txt",
+    "title": "Hybrid search - Pinecone Docs",
+    "source": "https://docs.pinecone.io/guides/search/hybrid-search"
+  },
+  {
+    "file": "source_05.txt",
+    "title": "OpenAI Platform",
+    "source": "https://platform.openai.com/overview"
+  }
+]

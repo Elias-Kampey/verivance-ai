@@ -2,4 +2,4 @@ https://docs.python.org/3/tutorial/
 https://docs.streamlit.io/develop/api-reference/widgets
 https://docs.pinecone.io/guides/search/semantic-search
 https://docs.pinecone.io/guides/search/hybrid-search
-https://platform.openai.com/docs/quickstart/make-your-first-api-request
+https://platform.openai.com/overview
