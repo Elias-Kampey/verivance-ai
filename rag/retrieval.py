@@ -26,21 +26,39 @@ def get_index():
 
 
 def format_matches(matches) -> list[dict]:
-    """Convert Pinecone matches into UI-friendly dictionaries."""
+    """Convert Pinecone matches into clean, deduplicated UI-friendly dictionaries."""
     formatted_results = []
+    seen_chunk_ids = set()
 
-    for rank, match in enumerate(matches, start=1):
+    for match in matches:
         metadata = match.metadata or {}
+
+        chunk_id = metadata.get("chunk_id") or getattr(match, "id", "")
+
+        if not chunk_id or chunk_id in seen_chunk_ids:
+            continue
+
+        text = metadata.get("text", "")
+
+        if not isinstance(text, str) or not text.strip():
+            continue
+
+        seen_chunk_ids.add(chunk_id)
+
+        try:
+            score = float(match.score)
+        except (TypeError, ValueError):
+            score = 0.0
 
         formatted_results.append(
             {
-                "rank": rank,
-                "score": float(match.score),
-                "title": metadata.get("title", ""),
-                "source": metadata.get("source", ""),
-                "chunk_id": metadata.get("chunk_id", ""),
-                "text": metadata.get("text", ""),
-                "excerpt": metadata.get("text", "")[:200], 
+                "rank": len(formatted_results) + 1,
+                "score": score,
+                "title": metadata.get("title") or "Untitled",
+                "source": metadata.get("source") or "Unknown source",
+                "chunk_id": chunk_id,
+                "text": text.strip(),
+                "excerpt": text.strip()[:200],
             }
         )
 

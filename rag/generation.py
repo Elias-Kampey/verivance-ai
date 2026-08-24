@@ -23,6 +23,11 @@ REFUSAL_MESSAGE = (
     "to answer this question."
 )
 
+ERROR_MESSAGE = (
+    "Verivance could not complete this request right now. "
+    "Please try again."
+)
+
 
 def build_evidence(results: list[dict]) -> str:
     """Format retrieved chunks as clearly labeled evidence."""
@@ -80,29 +85,52 @@ def generate_answer(
     if not question:
         raise ValueError("Question cannot be empty.")
 
-    results = search(question, top_k=top_k)
+    try:
+        results = search(question, top_k=top_k)
+    except Exception:
+        return {
+            "question": question,
+            "answer": ERROR_MESSAGE,
+            "sources": [],
+            "status": "error",
+        }
 
     if not results:
         return {
             "question": question,
             "answer": REFUSAL_MESSAGE,
             "sources": [],
+            "status": "refusal",
         }
 
     prompt = build_prompt(question, results)
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-    )
+    try:
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+        )
+    except Exception:
+        return {
+            "question": question,
+            "answer": ERROR_MESSAGE,
+            "sources": results,
+            "status": "error",
+        }
 
     answer = (response.text or "").strip()
 
     if not answer:
-        answer = REFUSAL_MESSAGE
+        return {
+            "question": question,
+            "answer": REFUSAL_MESSAGE,
+            "sources": results,
+            "status": "refusal",
+        }
 
     return {
         "question": question,
         "answer": answer,
         "sources": results,
+        "status": "ok",
     }
