@@ -128,6 +128,14 @@ def generate_answer(
             "status": "refusal",
         }
 
+    if answer == REFUSAL_MESSAGE:
+        return {
+            "question": question,
+            "answer": answer,
+            "sources": results,
+            "status": "refusal",
+        }
+
     return {
         "question": question,
         "answer": answer,
