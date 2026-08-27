@@ -1,3 +1,4 @@
+import time
 import os
 import re
 from pathlib import Path
@@ -127,7 +128,10 @@ def load_sample_documents(directory: str = "data/sample") -> list[dict]:
     return all_chunks
 
 
-def upload_to_pinecone(chunks: list[dict]) -> None:
+def upload_to_pinecone(
+    chunks: list[dict],
+    namespace: str = NAMESPACE
+) -> None:
     """Embed all chunks and upload them to Pinecone."""
     load_dotenv()
 
@@ -147,8 +151,10 @@ def upload_to_pinecone(chunks: list[dict]) -> None:
         embedding = embed_document(
             chunk["text"],
             title=chunk["title"],
+
         )
 
+        time.sleep(1)
         vectors.append(
             {
                 "id": chunk["chunk_id"],
@@ -162,17 +168,21 @@ def upload_to_pinecone(chunks: list[dict]) -> None:
             }
         )
 
-    print(f"\nClearing namespace '{NAMESPACE}'...")
-    index.delete(delete_all=True, namespace=NAMESPACE)
+    stats = index.describe_index_stats()
+
+    if namespace in stats.namespaces:
+        print(f"\nClearing namespace '{namespace}'...")
+        index.delete(delete_all=True, namespace=namespace)
+    else:
+        print(f"\nNamespace '{namespace}' does not exist yet. Creating it...")
 
     response = index.upsert(
         vectors=vectors,
-        namespace=NAMESPACE,
+        namespace=namespace,
     )
 
     print("\nUpload complete!")
     print(response)
-
 
 if __name__ == "__main__":
     chunks = load_sample_documents()
@@ -180,4 +190,3 @@ if __name__ == "__main__":
     print(f"Loaded {len(chunks)} chunks.\n")
 
     upload_to_pinecone(chunks)
-    

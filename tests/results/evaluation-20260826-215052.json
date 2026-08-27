@@ -1,0 +1,47 @@
+[
+  {
+    "id": "A01",
+    "category": "answerable",
+    "question": "How does semantic search work?",
+    "expected_source": "pinecone.io",
+    "top_source": "https://docs.pinecone.io/guides/search/semantic-search",
+    "top_domain": "docs.pinecone.io",
+    "top_score": 0.785652,
+    "source_match": true,
+    "refused": false,
+    "retrieval_ms": 896.3,
+    "generation_ms": 5741.2,
+    "total_ms": 6637.5,
+    "answer": "Semantic search (also referred to as nearest neighbor search, similarity search, or vector search) works by searching an index of dense vectors to find records that are most similar in meaning and context to a query [source_03-000]. \n\nKey mechanics of semantic search include:\n* **Vector Space Representation:** It uses dense vectors where each number corresponds to a point in a multidimensional space [source_03-000]. Vectors located closer together in this space are semantically similar [source_03-000, source_03-001].\n* **Text Embedding:** When searching with text, an embedding model converts the text into a dense vector [source_03-002].\n* **Similarity Scoring:** Querying uses dense vector values representing the query to find matching records [source_03-020]. Each record is returned with a similarity score based on its distance to the query vector, calculated according to the index's similarity metric [source_03-031]."
+  },
+  {
+    "id": "A02",
+    "category": "answerable",
+    "question": "What is hybrid search?",
+    "expected_source": "pinecone.io",
+    "top_source": "https://docs.pinecone.io/guides/search/hybrid-search",
+    "top_domain": "docs.pinecone.io",
+    "top_score": 0.816402,
+    "source_match": true,
+    "refused": false,
+    "retrieval_ms": 768.9,
+    "generation_ms": 6374.3,
+    "total_ms": 7143.2,
+    "answer": "Hybrid search is an information retrieval technique that combines semantic search and lexical search [SOURCE_ID: source_04-001, source_04-000]. \n\nIt is used to work around the limitations of each individual search method:\n* **Semantic search** can miss results based on exact keyword matches, such as domain-specific terminology [SOURCE_ID: source_04-000].\n* **Lexical search** can miss results based on relationships, such as synonyms and paraphrases [SOURCE_ID: source_04-000].\n\nIn vector implementations, hybrid search combines dense and sparse vectors to represent semantic and lexical signals [SOURCE_ID: source_04-001, source_04-008]."
+  },
+  {
+    "id": "A03",
+    "category": "answerable",
+    "question": "Why combine dense and sparse search?",
+    "expected_source": "pinecone.io",
+    "top_source": "https://docs.pinecone.io/guides/search/hybrid-search",
+    "top_domain": "docs.pinecone.io",
+    "top_score": 0.820892215,
+    "source_match": true,
+    "refused": false,
+    "retrieval_ms": 812.7,
+    "generation_ms": 4820.4,
+    "total_ms": 5633.1,
+    "answer": "Based on the retrieved evidence, dense and sparse search are combined to leverage dense vectors for semantic search and sparse vectors for lexical search [SOURCE_ID: source_04-010]."
+  }
+]

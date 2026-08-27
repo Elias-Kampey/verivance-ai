@@ -1,0 +1,22 @@
+[
+  {
+    "question": "How does semantic search work?",
+    "expected_source": "Pinecone"
+  },
+  {
+    "question": "What input widgets does Streamlit provide?",
+    "expected_source": "Streamlit"
+  },
+  {
+    "question": "What is Python?",
+    "expected_source": "Python"
+  },
+  {
+    "question": "What is hybrid search?",
+    "expected_source": "Pinecone"
+  },
+  {
+    "question": "How do I use the OpenAI API?",
+    "expected_source": "OpenAI"
+  }
+]

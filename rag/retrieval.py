@@ -1,49 +1,58 @@
-import os
-
-from dotenv import load_dotenv
 from pinecone import Pinecone
 
+from config.settings import (
+    DEFAULT_TOP_K,
+    PINECONE_API_KEY,
+    PINECONE_INDEX_NAME,
+    PINECONE_NAMESPACE,
+)
 from rag.embeddings import embed_query
-
-
-INDEX_NAME = "verivance-rag"
-NAMESPACE = "sample"
-DEFAULT_TOP_K = 5
 
 
 def get_index():
     """Connect to and return the configured Pinecone index."""
-    load_dotenv()
+    if not PINECONE_API_KEY:
+        raise ValueError(
+            "PINECONE_API_KEY is missing from .env"
+        )
 
-    api_key = os.getenv("PINECONE_API_KEY")
+    pc = Pinecone(api_key=PINECONE_API_KEY)
 
-    if not api_key:
-        raise ValueError("PINECONE_API_KEY is missing from .env")
-
-    pc = Pinecone(api_key=api_key)
-
-    return pc.Index(INDEX_NAME)
+    return pc.Index(PINECONE_INDEX_NAME)
 
 
-def format_matches(matches) -> list[dict]:
-    """Convert Pinecone matches into clean, deduplicated UI-friendly dictionaries."""
+def format_matches(
+    matches,
+    top_k: int = DEFAULT_TOP_K,
+) -> list[dict]:
+    """Convert Pinecone matches into clean, deduplicated results."""
     formatted_results = []
-    seen_chunk_ids = set()
+    seen_chunks = set()
 
     for match in matches:
         metadata = match.metadata or {}
 
-        chunk_id = metadata.get("chunk_id") or getattr(match, "id", "")
-
-        if not chunk_id or chunk_id in seen_chunk_ids:
-            continue
+        chunk_id = (
+            metadata.get("chunk_id")
+            or getattr(match, "id", "")
+        )
 
         text = metadata.get("text", "")
 
-        if not isinstance(text, str) or not text.strip():
+        if not isinstance(text, str):
             continue
 
-        seen_chunk_ids.add(chunk_id)
+        text = text.strip()
+
+        if not text:
+            continue
+
+        duplicate_key = chunk_id or text
+
+        if duplicate_key in seen_chunks:
+            continue
+
+        seen_chunks.add(duplicate_key)
 
         try:
             score = float(match.score)
@@ -54,19 +63,32 @@ def format_matches(matches) -> list[dict]:
             {
                 "rank": len(formatted_results) + 1,
                 "score": score,
-                "title": metadata.get("title") or "Untitled",
-                "source": metadata.get("source") or "Unknown source",
+                "title": (
+                    metadata.get("title")
+                    or "Untitled"
+                ),
+                "source": (
+                    metadata.get("source")
+                    or "Unknown source"
+                ),
                 "chunk_id": chunk_id,
-                "text": text.strip(),
-                "excerpt": text.strip()[:200],
+                "text": text,
+                "excerpt": text[:200],
             }
         )
+
+        if len(formatted_results) >= top_k:
+            break
 
     return formatted_results
 
 
-def search(query: str, top_k: int = DEFAULT_TOP_K) -> list[dict]:
-    """Retrieve the most relevant indexed chunks for a user query."""
+def search(
+    query: str,
+    top_k: int = DEFAULT_TOP_K,
+    namespace: str = PINECONE_NAMESPACE,
+) -> list[dict]:
+    """Retrieve the most relevant indexed chunks."""
     query = query.strip()
 
     if not query:
@@ -78,15 +100,22 @@ def search(query: str, top_k: int = DEFAULT_TOP_K) -> list[dict]:
     index = get_index()
     query_vector = embed_query(query)
 
+    # Fetch extra candidates so deduplication can still
+    # return up to top_k unique chunks.
+    candidate_count = max(top_k * 2, top_k)
+
     results = index.query(
-        namespace=NAMESPACE,
+        namespace=namespace,
         vector=query_vector,
-        top_k=top_k,
+        top_k=candidate_count,
         include_metadata=True,
         include_values=False,
     )
 
-    return format_matches(results.matches)
+    return format_matches(
+        results.matches,
+        top_k=top_k,
+    )
 
 
 if __name__ == "__main__":
@@ -97,7 +126,10 @@ if __name__ == "__main__":
     print("\nTop matches:\n")
 
     for match in matches:
-        print(f"{match['rank']}. Score: {match['score']:.4f}")
+        print(
+            f"{match['rank']}. "
+            f"Score: {match['score']:.4f}"
+        )
         print(f"   Title: {match['title']}")
         print(f"   Source: {match['source']}")
         print(f"   Chunk ID: {match['chunk_id']}")
