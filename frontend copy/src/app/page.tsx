@@ -48,7 +48,7 @@ type SearchResponse = {
   refused: boolean;
 };
 
-type View = "answer" | "sources" | "retrieval" | "trace";
+type View = "answer" | "sources" | "retrieval" ;
 
 const API_URL = "http://localhost:8000";
 
@@ -1121,12 +1121,7 @@ function TopBar({
             label="Retrieval"
           />
 
-          <Tab
-            active={view === "trace"}
-            onClick={() => setView("trace")}
-            icon={<FileText size={18} />}
-            label="Trace"
-          />
+          
         </nav>
 
         <div className="flex items-center gap-2">
