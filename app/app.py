@@ -1,109 +1,206 @@
+"""
+Verivance API — FastAPI wrapper around the existing RAG pipeline.
+
+This replaces app.py as the entry point. Your rag/ modules are
+untouched: this file only exposes them over HTTP so the Next.js
+frontend can call them.
+
+Run from the project root:
+    uvicorn api.main:app --reload --port 8000
+
+Docs while developing: http://localhost:8000/docs
+"""
+
 from pathlib import Path
 import sys
+import time
+from typing import Any
 
-import pandas as pd
-import streamlit as st
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
-
-# Let app/app.py import modules from the project root
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
+# Make the project root importable so `from rag...` resolves the same
+# way it did in app.py.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from rag.retrieval import search as rag_search
+from rag.generation import generate_answer as rag_generate_answer
 
-from rag.retrieval import search
-from rag.generation import generate_answer
+# Optional: if you add list_sources() to rag/retrieval.py later, the
+# /api/sources endpoint starts returning real index data automatically.
+try:
+    from rag.retrieval import list_sources as rag_list_sources
+except ImportError:
+    rag_list_sources = None
 
 
-st.set_page_config(
-    page_title="Verivance.ai",
-    page_icon="🔎",
-    layout="wide",
+app = FastAPI(title="Verivance API", version="1.0.0")
+
+# The Next.js dev server runs on a different port, so the browser
+# treats it as a different origin and blocks the request unless the
+# API says otherwise. This is the #1 thing that breaks when people
+# first wire a JS frontend to a Python backend.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-st.title("Verivance.ai")
-st.subheader("Search with evidence.")
 
-question = st.text_input(
-    "Ask a question",
-    placeholder="What do you want to research?",
-)
+# -----------------------------
+# Schemas
+# -----------------------------
+class SearchRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+    top_k: int = Field(default=5, ge=1, le=20)
+    namespace: str = Field(default="web")
 
-if st.button("Search"):
-    if question:
 
-        # Step 1: Retrieve evidence
-        with st.spinner("Searching sources..."):
-            results = search(
-                question,
-                top_k=5,
-                namespace="web",
-            )
+class Evidence(BaseModel):
+    rank: int
+    score: float
+    title: str
+    source: str
+    chunk_id: str
+    text: str
 
-        # Step 2: Generate grounded answer
-        with st.spinner("Generating evidence-based answer..."):
-            answer = generate_answer(
-                question,
-                results,
-            )
 
-        # Answer section
-        st.subheader("Answer")
+class SearchResponse(BaseModel):
+    question: str
+    answer: str
+    results: list[Evidence]
+    # Retrieval telemetry — this is what feeds the Analytics page and
+    # is the whole point of the product, so it ships in the response
+    # rather than being recomputed on the client.
+    latency_ms: int
+    chunks_retrieved: int
+    refused: bool
 
-        with st.container(border=True):
-            st.markdown(answer)
 
-        # Ranking chart
-        st.subheader("Retrieval Ranking")
+class SourceSummary(BaseModel):
+    title: str
+    url: str
+    chunks: int
+    indexed: bool
 
-        chart_data = pd.DataFrame(
-            {
-                "Source": [
-                    f"#{result['rank']}"
-                    for result in results
-                ],
-                "Relevance": [
-                    result["score"]
-                    for result in results
-                ],
-            }
+
+def _normalize(raw: dict[str, Any], fallback_rank: int) -> Evidence:
+    """Coerce a retrieval hit into a strict, frontend-safe shape.
+
+    app.py did this defensively inline with .get() everywhere. Doing it
+    once here means the TypeScript types on the other side can be
+    non-optional, which is most of the benefit of moving to TS.
+    """
+    try:
+        score = float(raw.get("score") or 0.0)
+    except (TypeError, ValueError):
+        score = 0.0
+
+    return Evidence(
+        rank=int(raw.get("rank") or fallback_rank),
+        score=score,
+        title=str(raw.get("title") or "Untitled source"),
+        source=str(raw.get("source") or ""),
+        chunk_id=str(raw.get("chunk_id") or "unknown"),
+        text=str(raw.get("text") or ""),
+    )
+
+
+# -----------------------------
+# Routes
+# -----------------------------
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.post("/api/search", response_model=SearchResponse)
+def search(payload: SearchRequest) -> SearchResponse:
+    started = time.perf_counter()
+
+    try:
+        raw_results = rag_search(
+            payload.question,
+            top_k=payload.top_k,
+            namespace=payload.namespace,
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Retrieval failed: {error}",
+        ) from error
+
+    results = [
+        _normalize(item, index + 1)
+        for index, item in enumerate(raw_results or [])
+    ]
+
+    # No evidence -> refuse. The refusal is a first-class response, not
+    # an error: the frontend renders it as a real answer state.
+    if not results:
+        return SearchResponse(
+            question=payload.question,
+            answer=(
+                "Verivance could not find evidence for this question in "
+                "its indexed sources, so it won't answer."
+            ),
+            results=[],
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            chunks_retrieved=0,
+            refused=True,
         )
 
-        st.bar_chart(
-            chart_data,
-            x="Source",
-            y="Relevance",
+    try:
+        answer = rag_generate_answer(payload.question, raw_results)
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Answer generation failed: {error}",
+        ) from error
+
+    return SearchResponse(
+        question=payload.question,
+        answer=str(answer),
+        results=results,
+        latency_ms=int((time.perf_counter() - started) * 1000),
+        chunks_retrieved=len(results),
+        refused=False,
+    )
+
+
+@app.get("/api/sources", response_model=list[SourceSummary])
+def sources() -> list[SourceSummary]:
+    """What Verivance currently has indexed.
+
+    Returns [] until you implement list_sources() in rag/retrieval.py.
+    The frontend renders an empty state for that, so this is safe to
+    ship before the function exists.
+    """
+    if rag_list_sources is None:
+        return []
+
+    try:
+        raw = rag_list_sources() or []
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not list sources: {error}",
+        ) from error
+
+    return [
+        SourceSummary(
+            title=str(item.get("title") or "Untitled source"),
+            url=str(item.get("url") or item.get("source") or ""),
+            chunks=int(item.get("chunks") or 0),
+            indexed=bool(item.get("indexed", True)),
         )
-
-        # Evidence cards
-        st.subheader("Evidence Retrieved")
-
-        for result in results:
-            with st.container(border=True):
-
-                st.markdown(
-                    f"### #{result['rank']} — {result['title']}"
-                )
-
-                col1, col2 = st.columns([1, 3])
-
-                with col1:
-                    st.metric(
-                        "Relevance",
-                        f"{result['score']:.3f}",
-                    )
-
-                with col2:
-                    st.markdown(
-                        f"[Open original source]({result['source']})"
-                    )
-
-                    st.caption(
-                        f"Chunk: {result['chunk_id']}"
-                    )
-
-                st.write(result["text"])
-
-    else:
-        st.warning("Please enter a question.")
+        for item in raw
+    ]
