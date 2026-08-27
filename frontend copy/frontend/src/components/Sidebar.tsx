@@ -6,8 +6,6 @@ import { useHistory } from "@/lib/history";
 
 const NAV_ITEMS = [
   { href: "/", label: "Search" },
-  { href: "/sources", label: "Sources" },
-  { href: "/analytics", label: "Analytics" },
 ];
 
 function timeAgo(timestamp: number): string {

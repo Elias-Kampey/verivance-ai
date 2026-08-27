@@ -77,8 +77,11 @@ Public Documents / Web Pages
 
 ### Current Interface
 
-- Streamlit
-- Pandas
+- Next.js
+- TypeScript
+- FastAPI
+- Pinecone
+- Gemini
 
 ### Evaluation
 
@@ -260,12 +263,26 @@ Configure your environment variables, then run the health check:
 python -m scripts.health_check
 ```
 
-## Run the Prototype
+## Run the App
 
-Start the Streamlit interface:
+Start the FastAPI backend from the repository root:
 
 ```bash
-streamlit run app.py
+python -m uvicorn app:app --reload --port 8000
+```
+
+Then start the Next.js frontend:
+
+```bash
+cd "frontend copy/frontend"
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
 ```
 
 ## Current Status
