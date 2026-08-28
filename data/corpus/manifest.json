@@ -18,10 +18,5 @@
     "file": "source_04.txt",
     "title": "Hybrid search - Pinecone Docs",
     "source": "https://docs.pinecone.io/guides/search/hybrid-search"
-  },
-  {
-    "file": "source_05.txt",
-    "title": "OpenAI Platform",
-    "source": "https://platform.openai.com/overview"
   }
 ]

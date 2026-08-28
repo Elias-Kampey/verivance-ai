@@ -1,14 +1,20 @@
 """
-Verivance API — FastAPI wrapper around the existing RAG pipeline.
+Verivance API
 
-This replaces app.py as the entry point. Your rag/ modules are
-untouched: this file only exposes them over HTTP so the Next.js
-frontend can call them.
+FastAPI backend for the Verivance source-first RAG search engine.
 
-Run from the project root:
-    uvicorn api.main:app --reload --port 8000
+The API:
+- searches the curated Pinecone corpus first
+- falls back to live web retrieval when indexed evidence is weak
+- generates grounded answers from retrieved evidence
+- returns citations, ranked sources, and retrieval telemetry to the frontend
+- refuses to answer when sufficient evidence is unavailable
 
-Docs while developing: http://localhost:8000/docs
+Local development:
+    uvicorn app:app --reload --port 8000
+
+API docs:
+    http://localhost:8000/docs
 """
 
 from config.settings import WEB_FALLBACK_THRESHOLD
