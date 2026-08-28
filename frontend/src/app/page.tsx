@@ -21,6 +21,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 import {
   FormEvent,
   KeyboardEvent,
@@ -48,9 +49,16 @@ type SearchResponse = {
   refused: boolean;
 };
 
+type SavedSession = {
+  id: string;
+  question: string;
+  result: SearchResponse;
+  createdAt: number;
+};
+
 type View = "answer" | "sources" | "retrieval";
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const HERO_LINES = [
   "What do you want to know?",
@@ -70,11 +78,49 @@ const SMART_PROMPTS = [
   }
 ]
 
+
+function formatScore(score: number): string {
+  if (!Number.isFinite(score)) {
+    return "—";
+  }
+
+  return `${(score * 100).toFixed(1)}%`;
+}
+
+function linkifyCitations(answer: string, results: Evidence[]): string {
+  const sourceMap = new Map(
+    results
+      .filter((result) => Boolean(result.source))
+      .map((result) => [result.chunk_id, result.source])
+  );
+
+  return answer.replace(/\[([^\]]+)\]/g, (full, contents: string) => {
+    const ids = contents
+      .split(",")
+      .map((item) => item.replace(/SOURCE_ID:\s*/gi, "").trim())
+      .filter(Boolean);
+
+    if (ids.length === 0 || !ids.every((id) => sourceMap.has(id))) {
+      return full;
+    }
+
+    return ids
+      .map((id) => {
+        const url = sourceMap.get(id)!.replace(/\)/g, "%29");
+        return `[${id}](${url})`;
+      })
+      .join(" ");
+  });
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [activeQuestion, setActiveQuestion] = useState("");
-  const [recent, setRecent] = useState<string[]>([]);
+  const [sessions, setSessions] = useState<SavedSession[]>([]);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [view, setView] = useState<View>("answer");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false);
 
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,29 +128,38 @@ export default function Home() {
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("verivance_recent");
+      const saved = localStorage.getItem("verivance:sessions");
+
       if (saved) {
-        setRecent(JSON.parse(saved));
+        setSessions(JSON.parse(saved));
       }
 
       const params = new URLSearchParams(window.location.search);
       const sharedQuery = params.get("q");
+
       if (sharedQuery) {
         setQuery(sharedQuery);
         runSearch(sharedQuery);
       }
     } catch {
-      // Ignore malformed local storage / URL state.
+      localStorage.removeItem("verivance:sessions");
+    } finally {
+      setSessionsLoaded(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!sessionsLoaded) return;
+
     try {
-      window.localStorage.setItem("verivance_recent", JSON.stringify(recent));
+      localStorage.setItem(
+        "verivance:sessions",
+        JSON.stringify(sessions)
+      );
     } catch {
       // Local storage may be unavailable in private/restricted browsing.
     }
-  }, [recent]);
+  }, [sessions, sessionsLoaded]);
 
   async function runSearch(raw: string) {
     const question = raw.trim();
@@ -118,14 +173,6 @@ export default function Home() {
     setResult(null);
     setActiveQuestion(question);
     setView("answer");
-
-    setRecent((current) => {
-      const filtered = current.filter(
-        (item) => item.toLowerCase() !== question.toLowerCase()
-      );
-
-      return [question, ...filtered].slice(0, 8);
-    });
 
     try {
       const controller = new AbortController();
@@ -155,7 +202,25 @@ export default function Home() {
         throw new Error(body.detail || "Search failed.");
       }
 
-      setResult(body);
+      const searchResult = body as SearchResponse;
+
+      setResult(searchResult);
+
+      setSessions((current) => {
+        const filtered = current.filter(
+          (session) =>
+            session.question.toLowerCase() !== question.toLowerCase()
+        );
+
+        const newSession: SavedSession = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          question,
+          result: searchResult,
+          createdAt: Date.now(),
+        };
+
+        return [newSession, ...filtered].slice(0, 20);
+      });
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError(
@@ -206,12 +271,33 @@ export default function Home() {
     setView("answer");
   }
 
+  function openSession(session: SavedSession) {
+    setQuery("");
+    setActiveQuestion(session.question);
+    setResult(session.result);
+    setError("");
+    setLoading(false);
+    setView("answer");
+  }
+
+  function removeSession(sessionId: string) {
+    setSessions((current) =>
+      current.filter((session) => session.id !== sessionId)
+    );
+  }
+
+  function clearHistory() {
+    setSessions([]);
+    localStorage.removeItem("verivance:sessions");
+    setConfirmClearHistory(false);
+  }
+
   const bestScore = useMemo(() => {
     if (!result?.results?.length) {
       return "—";
     }
 
-    return result.results[0].score.toFixed(3);
+    return formatScore(result.results[0].score);
   }, [result]);
 
   return (
@@ -219,24 +305,38 @@ export default function Home() {
       <StyleLayer />
       <Background />
 
-      <aside className="fixed inset-y-0 left-0 z-30 w-[260px] border-r border-white/[0.08] bg-[#181816]/95 backdrop-blur-xl">
-        <div className="flex h-full flex-col">
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.aside
+            initial={{ x: -260 }}
+            animate={{ x: 0 }}
+            exit={{ x: -260 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed inset-y-0 left-0 z-30 w-[260px] border-r border-white/[0.08] bg-[#181816]/95 backdrop-blur-xl"
+          >
+            <div className="flex h-full flex-col">
           <div className="flex h-16 items-center justify-between px-5">
             <div className="flex items-center gap-3">
-              <Mark />
+              <img
+                src="/Logo.png"
+                alt="Verivance logo"
+                className="h-12 w-12 object-contain"
+              />
 
               <div>
                 <div className="text-[18px] font-semibold tracking-[-0.04em]">
-                  Verivance
+                  Verivance AI
                 </div>
 
-                <div className="text-[11px] uppercase tracking-[0.16em] text-[#766f66]">
-                  AI Search Engine
-                </div>
+
               </div>
             </div>
 
-            <button className="rounded-lg p-2 text-[#858078] transition hover:bg-white/[0.06]">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close sidebar"
+              className="rounded-lg p-2 text-[#858078] transition hover:bg-white/[0.06]"
+            >
               <PanelLeft size={18} />
             </button>
           </div>
@@ -270,28 +370,75 @@ export default function Home() {
           <div className="mt-7 px-5">
             <div className="mb-3 flex items-center justify-between text-[13px] text-[#7b756d]">
               <span>Sessions</span>
-              <ChevronDown size={15} />
+
+              <div className="flex items-center gap-2">
+                {sessions.length > 0 &&
+                  (confirmClearHistory ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmClearHistory(false)}
+                        className="rounded-md px-1.5 py-1 text-[11px] text-[#7f776e] transition hover:bg-white/[0.05] hover:text-[#d8d2c8]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearHistory}
+                        className="rounded-md px-1.5 py-1 text-[11px] text-[#ff737b] transition hover:bg-[#ef1b24]/10 hover:text-[#ff9298]"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearHistory(true)}
+                      className="rounded-md px-1.5 py-1 text-[11px] text-[#7f776e] transition hover:bg-white/[0.05] hover:text-[#d8d2c8]"
+                      aria-label="Clear all search history"
+                      title="Clear all search history"
+                    >
+                      Clear all
+                    </button>
+                  ))}
+                <ChevronDown size={15} />
+              </div>
             </div>
 
             <div className="space-y-1">
-              {recent.length === 0 ? (
+              {sessions.length === 0 ? (
                 <p className="rounded-lg py-2 text-sm text-[#5d574f]">
                   No searches yet.
                 </p>
               ) : (
-                recent.map((item) => (
-                  <button
-                    key={item}
-                    onClick={() => runSearch(item)}
-                    className="group flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-[#b9b2a8] transition hover:bg-white/[0.055] hover:text-white"
+                sessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="group flex items-center rounded-lg transition hover:bg-white/[0.055]"
                   >
-                    <History
-                      size={14}
-                      className="shrink-0 text-[#706a62] transition group-hover:text-[#ef1b24]"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => openSession(session)}
+                      className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm text-[#b9b2a8] transition group-hover:text-white"
+                    >
+                      <History
+                        size={14}
+                        className="shrink-0 text-[#706a62] transition group-hover:text-[#ef1b24]"
+                      />
 
-                    <span className="truncate">{item}</span>
-                  </button>
+                      <span className="truncate">{session.question}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => removeSession(session.id)}
+                      aria-label={`Remove "${session.question}" from history`}
+                      title="Remove session"
+                      className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#625c55] opacity-0 transition hover:bg-[#ef1b24]/10 hover:text-[#ff737b] group-hover:opacity-100 focus:opacity-100"
+                    >
+                      <XCircle size={13} />
+                    </button>
+                  </div>
                 ))
               )}
             </div>
@@ -310,9 +457,24 @@ export default function Home() {
             </div>
           </div>
         </div>
-      </aside>
+      </motion.aside>
+    )}
+  </AnimatePresence>
 
-      <section className="relative z-10 ml-[260px] min-h-screen">
+      <section
+        className={`relative z-10 min-h-screen transition-[margin] duration-200 ${
+          sidebarOpen ? "ml-[260px]" : "ml-0"
+        }`}
+      >
+        {!sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open sidebar"
+            className="fixed left-4 top-4 z-40 rounded-lg border border-white/[0.08] bg-[#181816]/90 p-2 text-[#aaa298] backdrop-blur-xl transition hover:bg-white/[0.07] hover:text-white"
+          >
+            <PanelLeft size={18} />
+          </button>
+        )}
         <TopBar view={view} setView={setView} result={result} />
 
         <div className="mx-auto max-w-[880px] px-8 pb-36">
@@ -343,6 +505,7 @@ export default function Home() {
               result={result}
               view={view}
               bestScore={bestScore}
+              sidebarOpen={sidebarOpen}
             />
           )}
         </div>
@@ -376,8 +539,8 @@ function EmptyState({
       <RotatingHeadline />
 
       <p className="mx-auto mt-4 max-w-[610px] text-center text-[15px] leading-7 text-[#898177]">
-        Ask anything. Verivance searches your indexed knowledge base, ranks the
-        evidence, and shows exactly where the answer came from.
+        Ask anything. Verivance searches trusted indexed knowledge and the web when needed,
+        ranks the evidence, and shows exactly where the answer came from.
       </p>
 
       <Composer
@@ -412,6 +575,7 @@ function ResultShell({
   result,
   view,
   bestScore,
+  sidebarOpen,
 }: {
   query: string;
   setQuery: (value: string) => void;
@@ -423,6 +587,7 @@ function ResultShell({
   result: SearchResponse | null;
   view: View;
   bestScore: string;
+  sidebarOpen: boolean;
 }) {
   return (
     <div className="pt-10">
@@ -432,7 +597,7 @@ function ResultShell({
       >
         <div className="mb-5 flex items-center gap-2 text-sm text-[#827a70]">
           <Globe2 size={16} />
-          Searching indexed evidence
+          Searching evidence
           <ChevronDown size={15} />
         </div>
 
@@ -508,7 +673,11 @@ function ResultShell({
       </div>
 
       {!loading && result && (
-        <div className="fixed bottom-5 left-[260px] right-0 z-20 flex justify-center px-8">
+        <div
+          className={`fixed bottom-5 right-0 z-20 flex justify-center px-8 transition-[left] duration-200 ${
+            sidebarOpen ? "left-[260px]" : "left-0"
+          }`}
+        >
           <div className="w-full max-w-[760px]">
             <Composer
               query={query}
@@ -577,11 +746,21 @@ function AnswerView({
       </div>
 
       <article className="prose-answer">
-        <CitedAnswer
-          answer={result.answer}
-          results={result.results}
-          onCitationClick={setSelectedEvidence}
-        />
+        <ReactMarkdown
+          components={{
+            a: ({ href, children }) => (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {children}
+              </a>
+            ),
+          }}
+        >
+          {linkifyCitations(result.answer, result.results)}
+        </ReactMarkdown>
       </article>
 
       <div className="mt-6">
@@ -817,7 +996,7 @@ function RetrievalView({
 
       <div className="mt-7 grid grid-cols-3 gap-3">
         <Metric label="Chunks" value={String(result.chunks_retrieved)} />
-        <Metric label="Best score" value={bestScore} />
+        <Metric label="Best match" value={bestScore} />
         <Metric label="Latency" value={`${result.latency_ms} ms`} />
       </div>
 
@@ -829,14 +1008,14 @@ function RetrievalView({
                 #{source.rank} {source.title}
               </span>
 
-              <span>{source.score.toFixed(3)}</span>
+              <span>{formatScore(source.score)}</span>
             </div>
 
             <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
               <div
                 className="h-full rounded-full bg-[#ef1b24]"
                 style={{
-                  width: `${Math.min(source.score * 100, 100)}%`,
+                  width: `${Math.max(0, Math.min(source.score * 100, 100))}%`,
                 }}
               />
             </div>
@@ -948,7 +1127,7 @@ function PreSearchPage({
         <SmartPageShell
           eyebrow="Retrieval engine"
           title="Before it answers, it ranks."
-          subtitle="The retrieval page shows how many chunks were found, which source matched best, and how strong the similarity score was."
+          subtitle="The retrieval page shows how many chunks were found, which source matched best, and how strong each relevance match was."
           icon={<BarChart3 size={22} />}
         >
           <div className="space-y-3">
@@ -1090,12 +1269,12 @@ function RagIntelligenceStrip() {
     {
       icon: <Database size={16} />,
       title: "Retrieve",
-      text: "Pinecone chunks",
+      text: "Indexed + web evidence",
     },
     {
       icon: <BarChart3 size={16} />,
       title: "Rank",
-      text: "Similarity score",
+      text: "Relevance match",
     },
     {
       icon: <ShieldCheck size={16} />,
@@ -1391,7 +1570,7 @@ function EvidencePreview({
         </div>
 
         <div className="rounded-full bg-white/[0.06] px-2 py-1 text-xs text-[#a59d92]">
-          {source.score.toFixed(3)}
+          {formatScore(source.score)}
         </div>
       </div>
 
@@ -1453,27 +1632,6 @@ function MiniChip({ icon, text }: { icon: ReactNode; text: string }) {
   );
 }
 
-function Mark() {
-  return (
-    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ef1b24] shadow-[0_10px_35px_rgba(239,27,36,0.26)]">
-      <svg viewBox="0 0 64 64" className="h-5 w-5" fill="none">
-        <circle cx="15" cy="15" r="5" fill="white" />
-        <circle cx="15" cy="49" r="5" fill="white" />
-        <circle cx="49" cy="15" r="5" fill="white" />
-        <circle cx="49" cy="49" r="5" fill="white" />
-
-        <path
-          d="M20 18L32 32L44 18M20 46L32 32L44 46"
-          stroke="white"
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </div>
-  );
-}
-
 function LoadingAnswer() {
   const stages = [
     {
@@ -1483,7 +1641,7 @@ function LoadingAnswer() {
     },
     {
       title: "Searching evidence",
-      text: "Looking through indexed Pinecone chunks.",
+      text: "Searching indexed knowledge and live web evidence when needed.",
       icon: <Database size={18} />,
     },
     {
@@ -1583,8 +1741,45 @@ function StyleLayer() {
       }
 
       .prose-answer p {
-        margin: 0;
-        white-space: pre-wrap;
+        margin: 0 0 1rem;
+      }
+
+      .prose-answer p:last-child {
+        margin-bottom: 0;
+      }
+
+      .prose-answer strong {
+        color: #f3efe8;
+        font-weight: 600;
+      }
+
+      .prose-answer a {
+        color: #f3efe8;
+        text-decoration: underline;
+        text-decoration-color: #ef1b24;
+        text-underline-offset: 3px;
+        transition: color 0.15s ease;
+      }
+
+      .prose-answer a:hover {
+        color: #ff7c84;
+      }
+
+      .prose-answer ul,
+      .prose-answer ol {
+        margin: 0.8rem 0;
+        padding-left: 1.5rem;
+      }
+
+      .prose-answer li {
+        margin: 0.3rem 0;
+      }
+
+      .prose-answer code {
+        border-radius: 0.35rem;
+        background: rgba(255, 255, 255, 0.06);
+        padding: 0.1rem 0.3rem;
+        font-size: 0.92em;
       }
 
       ::selection {
