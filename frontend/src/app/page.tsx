@@ -11,10 +11,11 @@ import {
   History,
   Link2,
   Loader2,
-  Menu,
   MessageSquareText,
   PanelLeft,
   Search,
+  Share2,
+  CheckCircle2,
   ShieldCheck,
   Sparkles,
   XCircle,
@@ -78,6 +79,32 @@ export default function Home() {
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("verivance_recent");
+      if (saved) {
+        setRecent(JSON.parse(saved));
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const sharedQuery = params.get("q");
+      if (sharedQuery) {
+        setQuery(sharedQuery);
+        runSearch(sharedQuery);
+      }
+    } catch {
+      // Ignore malformed local storage / URL state.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("verivance_recent", JSON.stringify(recent));
+    } catch {
+      // Local storage may be unavailable in private/restricted browsing.
+    }
+  }, [recent]);
 
   async function runSearch(raw: string) {
     const question = raw.trim();
@@ -223,12 +250,6 @@ export default function Home() {
               New Search
             </button>
 
-            <SidebarButton
-              active={view === "answer"}
-              icon={<Sparkles size={18} />}
-              label="Answer"
-              onClick={() => setView("answer")}
-            />
 
             <SidebarButton
               active={view === "sources"}
@@ -512,18 +533,60 @@ function AnswerView({
   bestScore: string;
 }) {
   const topSources = result.results.slice(0, 3);
+  const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
+  const [shared, setShared] = useState(false);
+
+  const confidence = getEvidenceConfidence(result.results);
+
+  async function shareSearch() {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.searchParams.set("q", result.question);
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Verivance: ${result.question}`,
+          text: "View this Verivance search",
+          url: url.toString(),
+        });
+      } else {
+        await navigator.clipboard.writeText(url.toString());
+        setShared(true);
+        window.setTimeout(() => setShared(false), 1800);
+      }
+    } catch {
+      // User cancelled share sheet or clipboard was unavailable.
+    }
+  }
 
   return (
     <div>
-      <div className="mb-5 flex flex-wrap gap-2">
+      <div className="mb-5 flex flex-wrap items-center gap-2">
         {topSources.map((source) => (
           <SourcePill key={source.chunk_id} source={source} />
         ))}
+
+        <button
+          onClick={shareSearch}
+          className="ml-auto inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs text-[#aaa298] transition hover:bg-white/[0.07] hover:text-white"
+        >
+          {shared ? <CheckCircle2 size={13} /> : <Share2 size={13} />}
+          {shared ? "Link copied" : "Share"}
+        </button>
       </div>
 
       <article className="prose-answer">
-        <p>{result.answer}</p>
+        <CitedAnswer
+          answer={result.answer}
+          results={result.results}
+          onCitationClick={setSelectedEvidence}
+        />
       </article>
+
+      <div className="mt-6">
+        <ConfidenceCard confidence={confidence} />
+      </div>
 
       <div className="mt-8 grid grid-cols-3 gap-3">
         <Metric label="Sources" value={String(result.chunks_retrieved)} />
@@ -540,6 +603,181 @@ function AnswerView({
           {result.results.slice(0, 3).map((source) => (
             <EvidencePreview key={source.chunk_id} source={source} />
           ))}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {selectedEvidence && (
+          <EvidenceInspector
+            source={selectedEvidence}
+            onClose={() => setSelectedEvidence(null)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function CitedAnswer({
+  answer,
+  results,
+  onCitationClick,
+}: {
+  answer: string;
+  results: Evidence[];
+  onCitationClick: (source: Evidence) => void;
+}) {
+  const parts = answer.split(/(\[\d+\])/g);
+
+  return (
+    <p>
+      {parts.map((part, index) => {
+        const match = part.match(/^\[(\d+)\]$/);
+
+        if (!match) {
+          return <span key={`${part}-${index}`}>{part}</span>;
+        }
+
+        const citationNumber = Number(match[1]);
+        const source =
+          results.find((item) => item.rank === citationNumber) ??
+          results[citationNumber - 1];
+
+        if (!source) {
+          return <span key={`${part}-${index}`}>{part}</span>;
+        }
+
+        return (
+          <button
+            key={`${part}-${index}`}
+            onClick={() => onCitationClick(source)}
+            className="mx-0.5 inline-flex translate-y-[-1px] items-center rounded-md border border-[#ef1b24]/20 bg-[#ef1b24]/10 px-1.5 py-0.5 text-[12px] font-semibold leading-none text-[#ff737b] transition hover:bg-[#ef1b24]/20"
+            title={`Open evidence ${citationNumber}`}
+          >
+            {citationNumber}
+          </button>
+        );
+      })}
+    </p>
+  );
+}
+
+function EvidenceInspector({
+  source,
+  onClose,
+}: {
+  source: Evidence;
+  onClose: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.aside
+        initial={{ x: 40, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 40, opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        onClick={(event) => event.stopPropagation()}
+        className="absolute bottom-0 right-0 top-0 w-full max-w-[460px] overflow-y-auto border-l border-white/[0.09] bg-[#161513] p-6 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-5">
+          <div>
+            <div className="text-xs uppercase tracking-[0.22em] text-[#ef1b24]">
+              Evidence #{source.rank}
+            </div>
+            <h3 className="mt-2 text-[22px] font-medium tracking-[-0.035em] text-[#f2ece3]">
+              {source.title}
+            </h3>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-white/[0.08] p-2 text-[#9b9389] transition hover:bg-white/[0.06] hover:text-white"
+          >
+            <XCircle size={18} />
+          </button>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <Metric label="Rank" value={`#${source.rank}`} />
+          <Metric label="Score" value={source.score.toFixed(3)} />
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
+          <div className="mb-3 text-xs uppercase tracking-[0.18em] text-[#81796f]">
+            Retrieved passage
+          </div>
+          <p className="text-sm leading-7 text-[#c2bbb0]">{source.text}</p>
+        </div>
+
+        <div className="mt-5 text-xs text-[#6f685f]">{source.chunk_id}</div>
+
+        {source.source && (
+          <a
+            href={source.source}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl border border-white/[0.09] bg-white/[0.04] px-4 py-2.5 text-sm text-[#e8e2d8] transition hover:bg-white/[0.07]"
+          >
+            Open original source <Link2 size={14} />
+          </a>
+        )}
+      </motion.aside>
+    </motion.div>
+  );
+}
+
+function getEvidenceConfidence(results: Evidence[]) {
+  if (!results.length) {
+    return {
+      label: "No evidence",
+      detail: "No retrieved evidence was available for this answer.",
+    };
+  }
+
+  const scores = results.slice(0, 3).map((item) => item.score);
+  const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  const best = Math.max(...scores);
+
+  if (best >= 0.82 && average >= 0.72) {
+    return {
+      label: "Strong evidence",
+      detail: "Top retrieved sources closely match the question.",
+    };
+  }
+
+  if (best >= 0.65 && average >= 0.52) {
+    return {
+      label: "Moderate evidence",
+      detail: "Useful evidence was found, but some claims may need verification.",
+    };
+  }
+
+  return {
+    label: "Limited evidence",
+    detail: "Retrieval confidence is low. Review the sources before relying on the answer.",
+  };
+}
+
+function ConfidenceCard({
+  confidence,
+}: {
+  confidence: { label: string; detail: string };
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+      <ShieldCheck size={18} className="mt-0.5 shrink-0 text-[#ef1b24]" />
+      <div>
+        <div className="text-sm font-medium text-[#e8e2d8]">
+          {confidence.label}
+        </div>
+        <div className="mt-1 text-sm leading-6 text-[#8b8378]">
+          {confidence.detail}
         </div>
       </div>
     </div>
@@ -575,7 +813,9 @@ function RetrievalView({
         Retrieval analytics
       </h2>
 
-      <div className="grid grid-cols-3 gap-3">
+      <RetrievalFlow result={result} />
+
+      <div className="mt-7 grid grid-cols-3 gap-3">
         <Metric label="Chunks" value={String(result.chunks_retrieved)} />
         <Metric label="Best score" value={bestScore} />
         <Metric label="Latency" value={`${result.latency_ms} ms`} />
@@ -601,6 +841,52 @@ function RetrievalView({
               />
             </div>
           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RetrievalFlow({ result }: { result: SearchResponse }) {
+  const steps = [
+    ["Question", "Captured"],
+    ["Embedding", "Vectorized"],
+    ["Search", `${result.chunks_retrieved} chunks`],
+    ["Rank", "Similarity"],
+    ["Evidence", `${Math.min(result.results.length, 5)} selected`],
+    ["Answer", "Grounded"],
+  ];
+
+  return (
+    <div className="rounded-[24px] border border-white/[0.08] bg-white/[0.025] p-5">
+      <div className="mb-4 text-xs uppercase tracking-[0.2em] text-[#7f776e]">
+        Retrieval pipeline
+      </div>
+
+      <div className="grid grid-cols-6 gap-2">
+        {steps.map(([title, text], index) => (
+          <motion.div
+            key={title}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.08 }}
+            className="relative rounded-2xl border border-white/[0.07] bg-black/10 p-3"
+          >
+            <div className="mb-3 flex h-7 w-7 items-center justify-center rounded-full bg-[#ef1b24]/10 text-xs font-semibold text-[#ff737b]">
+              {index + 1}
+            </div>
+            <div className="text-xs font-medium text-[#e5ded4]">{title}</div>
+            <div className="mt-1 text-[11px] text-[#746d64]">{text}</div>
+
+            {index < steps.length - 1 && (
+              <motion.div
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ delay: 0.15 + index * 0.08, duration: 0.3 }}
+                className="absolute -right-2 top-1/2 h-px w-2 origin-left bg-[#ef1b24]/50"
+              />
+            )}
+          </motion.div>
         ))}
       </div>
     </div>
@@ -1008,9 +1294,6 @@ function TopBar({
             </div>
           )}
 
-          <button className="rounded-lg p-2 text-[#9a9288] transition hover:bg-white/[0.06]">
-            <Menu size={18} />
-          </button>
         </div>
       </div>
     </header>
