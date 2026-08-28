@@ -303,7 +303,7 @@ export default function Home() {
       return "—";
     }
 
-    return formatScore(result.results[0].score);
+    return `${formatScore(result.results[0].score)} relevance`;
   }, [result]);
 
   return (
@@ -1014,7 +1014,7 @@ function RetrievalView({
                 #{source.rank} {source.title}
               </span>
 
-              <span>{formatScore(source.score)}</span>
+              <span>{formatScore(source.score)} relevance</span>
             </div>
 
             <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
@@ -1576,7 +1576,7 @@ function EvidencePreview({
         </div>
 
         <div className="rounded-full bg-white/[0.06] px-2 py-1 text-xs text-[#a59d92]">
-          {formatScore(source.score)}
+          {formatScore(source.score)} relevance
         </div>
       </div>
 
