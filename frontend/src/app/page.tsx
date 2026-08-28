@@ -161,6 +161,12 @@ export default function Home() {
     }
   }, [sessions, sessionsLoaded]);
 
+  useEffect(() => {
+    fetch(`${API_URL}/api/health`).catch(() => {
+      // Wake Render silently.
+    });
+  }, []);
+
   async function runSearch(raw: string) {
     const question = raw.trim();
 
@@ -179,7 +185,7 @@ export default function Home() {
 
       const timeout = window.setTimeout(() => {
         controller.abort();
-      }, 25000);
+      }, 60000);
 
       const response = await fetch(`${API_URL}/api/search`, {
         method: "POST",
@@ -224,7 +230,7 @@ export default function Home() {
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError(
-          "Verivance took too long to generate an answer. Retrieval may be working, but the AI provider is slow or quota-limited."
+          "Verivance is taking longer than expected. The search service may still be starting up — please try again in a moment."
         );
       } else {
         setError(
