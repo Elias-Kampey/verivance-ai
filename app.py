@@ -11,6 +11,8 @@ Run from the project root:
 Docs while developing: http://localhost:8000/docs
 """
 
+from config.settings import WEB_FALLBACK_THRESHOLD
+from rag.web_retrieval import search_web
 from pathlib import Path
 import sys
 import time
@@ -129,17 +131,40 @@ def health() -> dict[str, str]:
 def search(payload: SearchRequest) -> SearchResponse:
     started = time.perf_counter()
 
+    # First search the curated Pinecone corpus.
     try:
-        raw_results = rag_search(
+        local_results = rag_search(
             payload.question,
             top_k=payload.top_k,
             namespace=payload.namespace,
         )
-    except Exception as error:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Retrieval failed: {error}",
-        ) from error
+    except Exception:
+        local_results = []
+
+    local_best_score = max(
+        (
+            float(item.get("score", 0.0))
+            for item in (local_results or [])
+        ),
+        default=0.0,
+    )
+
+    # Strong local evidence -> stay with Pinecone.
+    if local_results and local_best_score >= WEB_FALLBACK_THRESHOLD:
+        raw_results = local_results
+
+    else:
+        # Weak or missing local evidence -> search the live web.
+        try:
+            raw_results = search_web(
+                payload.question,
+                max_results=payload.top_k,
+            )
+        except Exception as error:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Web retrieval failed: {error}",
+            ) from error
 
     results = [
         _normalize(item, index + 1)

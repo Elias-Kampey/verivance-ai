@@ -146,7 +146,6 @@ Function
 6.4. Packages
 6.4.1. Importing * From a Package
 6.4.2. Intra-package References
-6.4.3. Packages in Multiple Directories
 7. Input and Output
 7.1. Fancier Output Formatting
 7.1.1. Formatted String Literals
@@ -263,7 +262,7 @@ History and License
 for more information.
 The Python Software Foundation is a non-profit corporation.
 Please donate.
-Last updated on Aug 21, 2026 (15:57 UTC).
+Last updated on Aug 27, 2026 (16:47 UTC).
 Found a bug
 ?
 Created using

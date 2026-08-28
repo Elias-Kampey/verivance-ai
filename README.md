@@ -271,6 +271,10 @@ Start the FastAPI backend from the repository root:
 python -m uvicorn app:app --reload --port 8000
 ```
 
+cd "C:\Users\elias\OneDrive\Documents\GitHub\verivance-ai"
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app:app --reload --port 8000
+
 Then start the Next.js frontend:
 
 ```bash

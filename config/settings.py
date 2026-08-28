@@ -22,6 +22,14 @@ PINECONE_NAMESPACE = os.getenv(
     "web",
 )
 
+# -----------------------------
+# Tavily
+# -----------------------------
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+
+WEB_FALLBACK_THRESHOLD = float(
+    os.getenv("WEB_FALLBACK_THRESHOLD", "0.72")
+)
 
 # -----------------------------
 # Gemini

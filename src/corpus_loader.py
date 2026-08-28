@@ -45,10 +45,10 @@ def fetch_page(url: str) -> dict:
         "footer",
         "header",
         "noscript",
-        "svg"
+        "svg",
+        "pre",
     ]):
         tag.decompose()
-
     if soup.title:
         title = soup.title.get_text(" ", strip=True)
     else:
