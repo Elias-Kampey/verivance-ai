@@ -1,4 +1,4 @@
-"use client";
+
 
 import {
   ArrowUp,
@@ -7,7 +7,6 @@ import {
   ChevronDown,
   CirclePlus,
   Database,
-  FileText,
   Globe2,
   History,
   Link2,
@@ -48,7 +47,7 @@ type SearchResponse = {
   refused: boolean;
 };
 
-type View = "answer" | "sources" | "retrieval" | "trace";
+type View = "answer" | "sources" | "retrieval";
 
 const API_URL = "http://localhost:8000";
 
@@ -245,12 +244,6 @@ export default function Home() {
               onClick={() => setView("retrieval")}
             />
 
-            <SidebarButton
-              active={view === "trace"}
-              icon={<FileText size={18} />}
-              label="Trace"
-              onClick={() => setView("trace")}
-            />
           </div>
 
           <div className="mt-7 px-5">
@@ -291,7 +284,7 @@ export default function Home() {
               </div>
 
               <div className="mt-2 text-sm text-[#b9b2a8]">
-                Search • Retrieve • Rank • Trace
+                Search • Retrieve • Rank
               </div>
             </div>
           </div>
@@ -490,16 +483,6 @@ function ResultShell({
             </motion.div>
           )}
 
-          {result && !loading && view === "trace" && (
-            <motion.div
-              key="trace"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-            >
-              <TraceView result={result} />
-            </motion.div>
-          )}
         </AnimatePresence>
       </div>
 
@@ -624,46 +607,6 @@ function RetrievalView({
   );
 }
 
-function TraceView({ result }: { result: SearchResponse }) {
-  return (
-    <div>
-      <h2 className="mb-4 text-[22px] font-medium tracking-[-0.035em]">
-        Trace
-      </h2>
-
-      <div className="space-y-3">
-        <TraceStep
-          icon={<MessageSquareText size={18} />}
-          title="Question received"
-          text={result.question}
-        />
-
-        <TraceStep
-          icon={<Search size={18} />}
-          title="Semantic retrieval"
-          text={`${result.chunks_retrieved} evidence chunks retrieved from namespace web.`}
-        />
-
-        <TraceStep
-          icon={<BarChart3 size={18} />}
-          title="Ranking"
-          text="Chunks were ordered by vector similarity score."
-        />
-
-        <TraceStep
-          icon={<ShieldCheck size={18} />}
-          title="Grounded generation"
-          text={
-            result.refused
-              ? "Verivance refused because evidence was insufficient."
-              : "Answer generated from retrieved evidence."
-          }
-        />
-      </div>
-    </div>
-  );
-}
-
 function PreSearchPage({
   view,
   runSearch,
@@ -673,7 +616,6 @@ function PreSearchPage({
 }) {
   const isSources = view === "sources";
   const isRetrieval = view === "retrieval";
-  const isTrace = view === "trace";
 
   return (
     <motion.div
@@ -753,40 +695,7 @@ function PreSearchPage({
         </SmartPageShell>
       )}
 
-      {isTrace && (
-        <SmartPageShell
-          eyebrow="Answer trace"
-          title="A RAG answer should leave footprints."
-          subtitle="Trace mode turns every answer into a transparent path: question, retrieval, ranking, generation, and cited evidence."
-          icon={<FileText size={22} />}
-        >
-          <div className="relative space-y-4">
-            <TracePreview
-              icon={<MessageSquareText size={18} />}
-              title="Question captured"
-              text="Verivance records the user question as the retrieval anchor."
-            />
 
-            <TracePreview
-              icon={<Search size={18} />}
-              title="Evidence retrieved"
-              text="The system pulls top matching chunks from the indexed namespace."
-            />
-
-            <TracePreview
-              icon={<ShieldCheck size={18} />}
-              title="Grounding check"
-              text="The model must answer using retrieved evidence or refuse."
-            />
-
-            <TracePreview
-              icon={<FileText size={18} />}
-              title="Source trail"
-              text="The final answer connects back to source IDs and evidence blocks."
-            />
-          </div>
-        </SmartPageShell>
-      )}
 
       <div className="mt-8 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
         <div className="mb-3 text-sm font-medium text-[#e8e2d8]">
@@ -907,15 +816,10 @@ function RagIntelligenceStrip() {
       title: "Ground",
       text: "Evidence only",
     },
-    {
-      icon: <FileText size={16} />,
-      title: "Trace",
-      text: "Source IDs",
-    },
   ];
 
   return (
-    <div className="mx-auto mt-8 grid max-w-[820px] grid-cols-5 gap-2">
+    <div className="mx-auto mt-8 grid max-w-[820px] grid-cols-4 gap-2">
       {items.map((item, index) => (
         <motion.div
           key={item.title}
@@ -1000,33 +904,6 @@ function SmartCard({
       <div className="text-sm font-medium text-[#e8e2d8]">{title}</div>
 
       <div className="mt-2 text-sm leading-6 text-[#8b8378]">{text}</div>
-    </motion.div>
-  );
-}
-
-function TracePreview({
-  icon,
-  title,
-  text,
-}: {
-  icon: ReactNode;
-  title: string;
-  text: string;
-}) {
-  return (
-    <motion.div
-      whileHover={{
-        x: 4,
-      }}
-      className="flex gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5"
-    >
-      <div className="mt-1 text-[#ef1b24]">{icon}</div>
-
-      <div>
-        <div className="font-medium text-[#e8e2d8]">{title}</div>
-
-        <div className="mt-1 text-sm leading-6 text-[#8b8378]">{text}</div>
-      </div>
     </motion.div>
   );
 }
@@ -1121,12 +998,7 @@ function TopBar({
             label="Retrieval"
           />
 
-          <Tab
-            active={view === "trace"}
-            onClick={() => setView("trace")}
-            icon={<FileText size={18} />}
-            label="Trace"
-          />
+          
         </nav>
 
         <div className="flex items-center gap-2">
@@ -1269,28 +1141,6 @@ function Metric({ label, value }: { label: string; value: string }) {
 
       <div className="mt-2 text-[24px] tracking-[-0.04em] text-[#f0eadf]">
         {value}
-      </div>
-    </div>
-  );
-}
-
-function TraceStep({
-  icon,
-  title,
-  text,
-}: {
-  icon: ReactNode;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="flex gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
-      <div className="mt-1 text-[#d9d6d0]">{icon}</div>
-
-      <div>
-        <div className="font-medium">{title}</div>
-
-        <div className="mt-1 text-sm leading-6 text-[#91897e]">{text}</div>
       </div>
     </div>
   );
