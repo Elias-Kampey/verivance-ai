@@ -668,10 +668,10 @@ Verivance was built as an exploration of those questions.
 ## Contributors
 
 **Elias Kampey**
-Backend, retrieval architecture, RAG pipeline, evaluation, API integration, deployment, and production integration.
+Backend, retrieval architecture, RAG pipeline, API integration, and deployment.
 
 **MK**
-Frontend and UI development.
+Frontend and UI development, and deployment.
 
 ---
 
