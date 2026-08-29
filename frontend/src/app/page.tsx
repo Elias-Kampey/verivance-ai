@@ -561,7 +561,7 @@ function EmptyState({
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex min-h-[calc(100vh-80px)] flex-col justify-center pb-28"
+      className="flex min-h-[calc(100vh-80px)] flex-col justify-center pb-28 pt-10 sm:pt-8 md:pt-0"
     >
 
       <RotatingHeadline />
@@ -1223,7 +1223,7 @@ function RotatingHeadline() {
   }, []);
 
   return (
-    <h1 className="min-h-[48px] px-1 text-center text-[32px] font-normal leading-tight tracking-[-0.055em] text-[#f3efe8] sm:text-[38px] md:min-h-[58px] md:text-[44px]">
+    <h1 className="flex min-h-[96px] items-center justify-center px-1 text-center text-[32px] font-normal leading-tight tracking-[-0.055em] text-[#f3efe8] sm:min-h-[90px] sm:text-[38px] md:min-h-[58px] md:text-[44px]">
       <AnimatePresence mode="wait">
         <motion.span
           key={HERO_LINES[index]}
