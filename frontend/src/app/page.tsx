@@ -127,6 +127,19 @@ export default function Home() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+
+    const syncSidebar = () => {
+    setSidebarOpen(!media.matches);
+    };
+
+    syncSidebar();
+    media.addEventListener("change", syncSidebar);
+
+    return () => media.removeEventListener("change", syncSidebar);
+  }, []);
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem("verivance:sessions");
 
@@ -307,7 +320,7 @@ export default function Home() {
   }, [result]);
 
   return (
-    <main className="min-h-screen bg-[#111110] text-[#e9e5dc]">
+    <main className="min-h-screen overflow-x-hidden bg-[#111110] text-[#e9e5dc]">
       <StyleLayer />
       <Background />
 
@@ -318,7 +331,7 @@ export default function Home() {
             animate={{ x: 0 }}
             exit={{ x: -260 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-y-0 left-0 z-30 w-[260px] border-r border-white/[0.08] bg-[#181816]/95 backdrop-blur-xl"
+            className="fixed inset-y-0 left-0 z-30 w-[86vw] max-w-[320px] border-r border-white/[0.08] bg-[#181816]/95 backdrop-blur-xl md:w-[260px]"
           >
             <div className="flex h-full flex-col">
           <div className="flex h-16 items-center justify-between px-5">
@@ -467,9 +480,18 @@ export default function Home() {
     )}
   </AnimatePresence>
 
+  {sidebarOpen && (
+    <button
+      type="button"
+      aria-label="Close sidebar"
+      onClick={() => setSidebarOpen(false)}
+      className="fixed inset-0 z-20 bg-black/45 backdrop-blur-[1px] md:hidden"
+    />
+  )}
+
       <section
         className={`relative z-10 min-h-screen transition-[margin] duration-200 ${
-          sidebarOpen ? "ml-[260px]" : "ml-0"
+          sidebarOpen ? "ml-0 md:ml-[260px]" : "ml-0"
         }`}
       >
         {!sidebarOpen && (
@@ -483,7 +505,7 @@ export default function Home() {
         )}
         <TopBar view={view} setView={setView} result={result} />
 
-        <div className="mx-auto max-w-[880px] px-8 pb-36">
+        <div className="mx-auto w-full max-w-[880px] px-4 pb-36 sm:px-6 md:px-8">
           {!activeQuestion && view === "answer" && (
             <EmptyState
               query={query}
@@ -544,7 +566,7 @@ function EmptyState({
 
       <RotatingHeadline />
 
-      <p className="mx-auto mt-4 max-w-[610px] text-center text-[15px] leading-7 text-[#898177]">
+      <p className="mx-auto mt-4 max-w-[610px] px-1 text-center text-[14px] leading-6 text-[#898177] sm:text-[15px] sm:leading-7">
         Ask anything. Verivance searches trusted indexed knowledge and the web when needed,
         ranks the evidence, and shows exactly where the answer came from.
       </p>
@@ -558,7 +580,7 @@ function EmptyState({
         large
       />
 
-      <div className="mt-5 flex justify-center gap-2">
+      <div className="mt-5 flex flex-wrap justify-center gap-2">
         <MiniChip icon={<ShieldCheck size={14} />} text="Grounded" />
         <MiniChip icon={<BookOpen size={14} />} text="Source-first" />
         <MiniChip icon={<BarChart3 size={14} />} text="Ranked evidence" />
@@ -607,7 +629,7 @@ function ResultShell({
           <ChevronDown size={15} />
         </div>
 
-        <h1 className="max-w-[780px] text-[32px] font-normal leading-tight tracking-[-0.045em] text-[#f3efe8]">
+        <h1 className="max-w-[780px] text-[26px] font-normal leading-tight tracking-[-0.045em] text-[#f3efe8] sm:text-[32px]">
           {activeQuestion}
         </h1>
       </motion.div>
@@ -680,8 +702,8 @@ function ResultShell({
 
       {!loading && result && (
         <div
-          className={`fixed bottom-5 right-0 z-20 flex justify-center px-8 transition-[left] duration-200 ${
-            sidebarOpen ? "left-[260px]" : "left-0"
+          className={`fixed bottom-3 right-0 z-20 flex justify-center px-4 transition-[left] duration-200 sm:bottom-5 sm:px-6 md:px-8 ${
+            sidebarOpen ? "left-0 md:left-[260px]" : "left-0"
           }`}
         >
           <div className="w-full max-w-[760px]">
@@ -773,7 +795,7 @@ function AnswerView({
         <ConfidenceCard confidence={confidence} />
       </div>
 
-      <div className="mt-8 grid grid-cols-3 gap-3">
+      <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Metric label="Sources" value={String(result.chunks_retrieved)} />
         <Metric label="Best match" value={bestScore} />
         <Metric label="Response" value={`${result.latency_ms} ms`} />
@@ -1000,7 +1022,7 @@ function RetrievalView({
 
       <RetrievalFlow result={result} />
 
-      <div className="mt-7 grid grid-cols-3 gap-3">
+      <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Metric label="Chunks" value={String(result.chunks_retrieved)} />
         <Metric label="Best match" value={bestScore} />
         <Metric label="Latency" value={`${result.latency_ms} ms`} />
@@ -1048,7 +1070,7 @@ function RetrievalFlow({ result }: { result: SearchResponse }) {
         Retrieval pipeline
       </div>
 
-      <div className="grid grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {steps.map(([title, text], index) => (
           <motion.div
             key={title}
@@ -1201,7 +1223,7 @@ function RotatingHeadline() {
   }, []);
 
   return (
-    <h1 className="min-h-[58px] text-center text-[44px] font-normal tracking-[-0.065em] text-[#f3efe8]">
+    <h1 className="min-h-[48px] px-1 text-center text-[32px] font-normal leading-tight tracking-[-0.055em] text-[#f3efe8] sm:text-[38px] md:min-h-[58px] md:text-[44px]">
       <AnimatePresence mode="wait">
         <motion.span
           key={HERO_LINES[index]}
@@ -1239,7 +1261,7 @@ function PromptDeck({
   runSearch: (question: string) => void;
 }) {
   return (
-    <div className="mx-auto mt-8 grid max-w-[760px] grid-cols-2 gap-3">
+    <div className="mx-auto mt-8 grid max-w-[760px] grid-cols-1 gap-3 sm:grid-cols-2">
       {SMART_PROMPTS.map((prompt, index) => (
         <motion.button
           key={prompt.query}
@@ -1446,8 +1468,8 @@ function TopBar({
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-[#111110]/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-[1060px] items-center justify-between px-8">
-        <nav className="flex h-full items-center gap-8">
+      <div className="mx-auto flex h-16 max-w-[1060px] items-center justify-between px-4 pl-14 sm:px-6 sm:pl-14 md:px-8 md:pl-8">
+        <nav className="flex h-full min-w-0 items-center gap-4 sm:gap-6 md:gap-8">
           <Tab
             active={view === "answer"}
             onClick={() => setView("answer")}
@@ -1499,7 +1521,7 @@ function Tab({
   return (
     <button
       onClick={onClick}
-      className={`relative flex h-full items-center gap-2 text-[15px] transition ${
+      className={`relative flex h-full items-center gap-1.5 whitespace-nowrap text-[13px] transition sm:gap-2 sm:text-[15px] ${
         active ? "text-[#e8e2d8]" : "text-[#8a8278] hover:text-[#e8e2d8]"
       }`}
     >
