@@ -667,10 +667,10 @@ Verivance was built as an exploration of those questions.
 
 ## Contributors
 
-**Elias Kampey**
+**Elias Mahdi**
 Backend, retrieval architecture, RAG pipeline, API integration, and deployment.
 
-**MK**
+**Mkareos Kzkoz**
 Frontend and UI development, and deployment.
 
 ---
