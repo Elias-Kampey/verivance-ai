@@ -4,6 +4,7 @@ from google import genai
 
 from config.settings import (
     GEMINI_API_KEY,
+    GEMINI_FALLBACK_MODEL,
     GEMINI_MODEL,
 )
 from utils.logger import get_logger
@@ -154,84 +155,112 @@ def generate_answer(
         len(results),
     )
 
-    retry_delays = [0, 2, 4]
+    models = [GEMINI_MODEL]
 
-    for attempt, delay in enumerate(
-        retry_delays,
-        start=1,
+    if (
+        GEMINI_FALLBACK_MODEL
+        and GEMINI_FALLBACK_MODEL != GEMINI_MODEL
     ):
-        if delay:
-            logger.warning(
-                "Retrying Gemini generation in %d seconds "
-                "(attempt %d/%d).",
-                delay,
-                attempt,
-                len(retry_delays),
-            )
-            time.sleep(delay)
+        models.append(GEMINI_FALLBACK_MODEL)
 
-        try:
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=prompt,
-            )
+    for model_index, model_name in enumerate(models):
+        retry_delays = [0, 2]
 
-            answer = (
-                response.text
-                or ""
-            ).strip()
-
-            if not answer:
+        for attempt, delay in enumerate(
+            retry_delays,
+            start=1,
+        ):
+            if delay:
                 logger.warning(
-                    "Gemini returned an empty response."
-                )
-                return REFUSAL_MESSAGE
-
-            logger.info(
-                "Grounded generation completed successfully."
-            )
-
-            return answer
-
-        except Exception as error:
-            error_text = str(error).lower()
-
-            if (
-                "429" in error_text
-                or "resource_exhausted" in error_text
-                or "quota" in error_text
-            ):
-                logger.warning(
-                    "Gemini quota exceeded."
-                )
-                return QUOTA_MESSAGE
-
-            is_temporary_error = (
-                "503" in error_text
-                or "unavailable" in error_text
-                or "high demand" in error_text
-                or "temporarily unavailable" in error_text
-            )
-
-            if is_temporary_error:
-                logger.warning(
-                    "Gemini temporarily unavailable "
+                    "Retrying Gemini model %s in %d seconds "
                     "(attempt %d/%d).",
+                    model_name,
+                    delay,
                     attempt,
                     len(retry_delays),
                 )
+                time.sleep(delay)
 
-                if attempt < len(retry_delays):
-                    continue
-
-                logger.error(
-                    "Gemini remained unavailable after retries."
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
                 )
-                return TEMPORARY_UNAVAILABLE_MESSAGE
 
-            logger.exception(
-                "Gemini generation failed."
-            )
-            return GENERATION_ERROR_MESSAGE
+                answer = (
+                    response.text
+                    or ""
+                ).strip()
+
+                if not answer:
+                    logger.warning(
+                        "Gemini model %s returned an empty response.",
+                        model_name,
+                    )
+                    return REFUSAL_MESSAGE
+
+                logger.info(
+                    "Grounded generation completed successfully "
+                    "with model %s.",
+                    model_name,
+                )
+
+                return answer
+
+            except Exception as error:
+                error_text = str(error).lower()
+
+                if (
+                    "429" in error_text
+                    or "resource_exhausted" in error_text
+                    or "quota" in error_text
+                ):
+                    logger.warning(
+                        "Gemini quota exceeded."
+                    )
+                    return QUOTA_MESSAGE
+
+                is_temporary_error = (
+                    "503" in error_text
+                    or "unavailable" in error_text
+                    or "high demand" in error_text
+                    or "temporarily unavailable" in error_text
+                )
+
+                if is_temporary_error:
+                    logger.warning(
+                        "Gemini model %s temporarily unavailable "
+                        "(attempt %d/%d).",
+                        model_name,
+                        attempt,
+                        len(retry_delays),
+                    )
+
+                    if attempt < len(retry_delays):
+                        continue
+
+                    has_fallback = (
+                        model_index < len(models) - 1
+                    )
+
+                    if has_fallback:
+                        logger.warning(
+                            "Switching from %s to fallback model %s.",
+                            model_name,
+                            models[model_index + 1],
+                        )
+                        break
+
+                    logger.error(
+                        "Gemini remained unavailable after "
+                        "primary and fallback attempts."
+                    )
+                    return TEMPORARY_UNAVAILABLE_MESSAGE
+
+                logger.exception(
+                    "Gemini generation failed using model %s.",
+                    model_name,
+                )
+                return GENERATION_ERROR_MESSAGE
 
     return GENERATION_ERROR_MESSAGE

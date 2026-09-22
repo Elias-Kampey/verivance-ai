@@ -25,6 +25,7 @@ PINECONE_NAMESPACE = os.getenv(
 # -----------------------------
 # Tavily
 # -----------------------------
+
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 
 WEB_FALLBACK_THRESHOLD = float(
@@ -40,6 +41,11 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv(
     "GEMINI_MODEL",
     "gemini-3.6-flash",
+)
+
+GEMINI_FALLBACK_MODEL = os.getenv(
+    "GEMINI_FALLBACK_MODEL",
+    "gemini-3.5-flash",
 )
 
 
