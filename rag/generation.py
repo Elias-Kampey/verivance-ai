@@ -1,3 +1,5 @@
+import time
+
 from google import genai
 
 from config.settings import (
@@ -22,6 +24,11 @@ QUOTA_MESSAGE = (
 
 GENERATION_ERROR_MESSAGE = (
     "Verivance could not generate an answer right now."
+)
+
+TEMPORARY_UNAVAILABLE_MESSAGE = (
+    "Verivance generation is temporarily busy. "
+    "Please try again in a moment."
 )
 
 
@@ -147,43 +154,84 @@ def generate_answer(
         len(results),
     )
 
-    try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-        )
+    retry_delays = [0, 2, 4]
 
-    except Exception as error:
-        error_text = str(error).lower()
-
-        if (
-            "429" in error_text
-            or "resource_exhausted" in error_text
-            or "quota" in error_text
-        ):
+    for attempt, delay in enumerate(
+        retry_delays,
+        start=1,
+    ):
+        if delay:
             logger.warning(
-                "Gemini quota exceeded."
+                "Retrying Gemini generation in %d seconds "
+                "(attempt %d/%d).",
+                delay,
+                attempt,
+                len(retry_delays),
             )
-            return QUOTA_MESSAGE
+            time.sleep(delay)
 
-        logger.exception(
-            "Gemini generation failed."
-        )
-        return GENERATION_ERROR_MESSAGE
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
 
-    answer = (
-        response.text
-        or ""
-    ).strip()
+            answer = (
+                response.text
+                or ""
+            ).strip()
 
-    if not answer:
-        logger.warning(
-            "Gemini returned an empty response."
-        )
-        return REFUSAL_MESSAGE
+            if not answer:
+                logger.warning(
+                    "Gemini returned an empty response."
+                )
+                return REFUSAL_MESSAGE
 
-    logger.info(
-        "Grounded generation completed successfully."
-    )
+            logger.info(
+                "Grounded generation completed successfully."
+            )
 
-    return answer
+            return answer
+
+        except Exception as error:
+            error_text = str(error).lower()
+
+            if (
+                "429" in error_text
+                or "resource_exhausted" in error_text
+                or "quota" in error_text
+            ):
+                logger.warning(
+                    "Gemini quota exceeded."
+                )
+                return QUOTA_MESSAGE
+
+            is_temporary_error = (
+                "503" in error_text
+                or "unavailable" in error_text
+                or "high demand" in error_text
+                or "temporarily unavailable" in error_text
+            )
+
+            if is_temporary_error:
+                logger.warning(
+                    "Gemini temporarily unavailable "
+                    "(attempt %d/%d).",
+                    attempt,
+                    len(retry_delays),
+                )
+
+                if attempt < len(retry_delays):
+                    continue
+
+                logger.error(
+                    "Gemini remained unavailable after retries."
+                )
+                return TEMPORARY_UNAVAILABLE_MESSAGE
+
+            logger.exception(
+                "Gemini generation failed."
+            )
+            return GENERATION_ERROR_MESSAGE
+
+    return GENERATION_ERROR_MESSAGE
